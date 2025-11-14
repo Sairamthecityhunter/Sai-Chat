@@ -221,5 +221,8 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 server.listen(PORT, HOST, () => {
-  console.log(`✓ Chat server running on http://${HOST}:${PORT}`);
+  const protocol = process.env.RAILWAY_ENVIRONMENT ? 'https' : 'http';
+  const hostname = process.env.RAILWAY_PUBLIC_DOMAIN || HOST;
+  console.log(`✓ Chat server running on ${protocol}://${hostname}:${PORT}`);
+  console.log(`✓ Server is ready to accept connections`);
 });
