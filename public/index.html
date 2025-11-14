@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sai Chat</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="app">
+        <div class="sidebar">
+            <div class="brand">
+                <div class="brand-icon"></div>
+                <div class="brand-name">Sai Chat</div>
+            </div>
+            <div class="group">
+                <div class="group-head">
+                    <span>Rooms</span>
+                    <button class="add-room-btn" id="addRoomBtn" title="Create new room">+</button>
+                </div>
+                <div class="room-list" id="rooms"></div>
+                <div class="create-room" id="createRoom" style="display:none;">
+                    <input type="text" id="newRoomInput" placeholder="Room name..." class="new-room-input">
+                    <div class="room-actions">
+                        <button class="room-action-btn" id="createRoomBtn">Create</button>
+                        <button class="room-action-btn cancel" id="cancelRoomBtn">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="group">
+                <div class="group-head">
+                    <span>Online (<span id="onlineCount">0</span>)</span>
+                </div>
+                <div class="user-list" id="users"></div>
+            </div>
+        </div>
+        <div class="main">
+            <div class="chat-head">
+                <h1 id="roomTitle"># global</h1>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="share-btn" id="shareBtn" title="Copy room link">🔗</button>
+                    <button class="gear">⚙️</button>
+                </div>
+            </div>
+            <div class="messages" id="messages"></div>
+            <div class="typing" id="typing"></div>
+            <div class="composer">
+                <button class="icon-btn">📎</button>
+                <input type="text" class="input" id="input" placeholder="Type a message...">
+                <button class="send" id="send">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+const socket = io();
+const $users = document.getElementById('users');
+const $onlineCount = document.getElementById('onlineCount');
+const $rooms = document.getElementById('rooms');
+const $roomTitle = document.getElementById('roomTitle');
+const $messages = document.getElementById('messages');
+const $input = document.getElementById('input');
+const $send = document.getElementById('send');
+const $typing = document.getElementById('typing');
+
+const state = {
+    users: [],
+    room: 'global',
+    name: '',
+    typingBy: new Set(),
+    allRooms: []
+};
+
+function addMessage(msg) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + (msg.user.name === state.name ? 'me' : 'other');
+    const time = new Date(msg.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    el.innerHTML = `
+        <div class="msg-meta">
+            <span class="name">${escapeHtml(msg.user.name)}</span>
+            <span class="time">${time}</span>
+        </div>
+        <div class="msg-text">${escapeHtml(msg.text)}</div>
+    `;
+    $messages.appendChild(el);
+    autoscroll();
+}
+
+function autoscroll(){
+    $messages.scrollTop = $messages.scrollHeight;
+}
+
+function setUsers(list){
+    state.users = list;
+    $users.innerHTML = '';
+    list.forEach(u => {
+        const el = document.createElement('div');
+        el.className = 'user';
+        el.innerHTML = `<span class="dot"></span><span>${escapeHtml(u.name)}</span>`;
+        $users.appendChild(el);
+    });
+    $onlineCount.textContent = list.length;
+}
+
+function renderRooms(){
+    $rooms.innerHTML = '';
+    // Use the list of rooms from server, ensuring global and current room are included
+    const roomIds = [...new Set(['global', ...state.allRooms, state.room])].sort();
+    
+    // Put global first
+    const sortedRooms = [];
+    if (roomIds.includes('global')) {
+        sortedRooms.push('global');
+        roomIds.forEach(r => {
+            if (r !== 'global') sortedRooms.push(r);
+        });
+    } else {
+        sortedRooms.push(...roomIds);
+    }
+    
+    sortedRooms.forEach(r => {
+        const a = document.createElement('button');
+        a.className = 'room' + (r === state.room ? ' active' : '');
+        a.textContent = `# ${r}`;
+        a.onclick = () => {
+            joinRoom(r);
+        };
+        $rooms.appendChild(a);
+    });
+}
+
+function joinRoom(roomId) {
+    if (!socket.connected) {
+        console.log('Socket not connected, waiting...');
+        // Wait for connection
+        socket.once('connect', () => {
+            console.log('Socket connected, joining room');
+            joinRoom(roomId);
+        });
+        return;
+    }
+    
+    if (!roomId) {
+        roomId = 'global';
+    }
+    
+    // Sanitize room ID (same as server)
+    const sanitized = roomId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '').slice(0, 50) || 'global';
+    
+    console.log('Joining room:', sanitized, 'from input:', roomId);
+    
+    state.room = sanitized;
+    
+    // Emit join event
+    socket.emit('join', { roomId: sanitized, name: state.name });
+    
+    // Update UI
+    $roomTitle.textContent = `# ${sanitized}`;
+    [...$rooms.children].forEach(ch => ch.classList.remove('active'));
+    
+    // Update active room button after rooms are rendered
+    setTimeout(() => {
+        const activeBtn = Array.from($rooms.children).find(ch => ch.textContent === `# ${sanitized}`);
+        if (activeBtn) activeBtn.classList.add('active');
+    }, 100);
+    
+    $messages.innerHTML = '';
+    
+    // Update URL without page reload
+    const url = new URL(window.location);
+    if (sanitized !== 'global') {
+        url.searchParams.set('room', sanitized);
+    } else {
+        url.searchParams.delete('room');
+    }
+    window.history.pushState({ room: sanitized }, '', url);
+}
+
+let typingTimer;
+$input.addEventListener('input', () => {
+    clearTimeout(typingTimer);
+    socket.emit('typing', true);
+    typingTimer = setTimeout(() => socket.emit('typing', false), 900);
+});
+
+$input.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        $send.onclick();
+    }
+});
+
+$send.onclick = () => {
+    const text = ($input.value || '').trim();
+    if (!text) return;
+    socket.emit('message', { text });
+    $input.value='';
+    socket.emit('typing', false);
+};
+
+// Socket events
+socket.on('history', (msgs) => {
+    $messages.innerHTML = '';
+    msgs.forEach(addMessage);
+    autoscroll();
+});
+
+socket.on('message', addMessage);
+socket.on('system', addMessage);
+socket.on('presence:update', setUsers);
+
+socket.on('typing', ({ name, isTyping }) => {
+    if (isTyping) state.typingBy.add(name); else state.typingBy.delete(name);
+    const others = [...state.typingBy].filter(n => n !== state.name);
+    $typing.textContent = others.length ? `${others.join(', ')} typing…` : '';
+});
+
+socket.on('rooms:list', (roomList) => {
+    // Ensure global is always in the list
+    if (!roomList.includes('global')) {
+        roomList.push('global');
+    }
+    state.allRooms = roomList;
+    renderRooms();
+    
+    // If we haven't initialized yet and socket is connected, try to initialize
+    if (!initialized && socket.connected && nameEntered) {
+        setTimeout(() => {
+            if (!initialized) {
+                initializeApp();
+            }
+        }, 100);
+    }
+});
+
+function escapeHtml(str){
+    return String(str).replace(/[&<>\"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]));
+}
+
+// Room creation UI
+const $addRoomBtn = document.getElementById('addRoomBtn');
+const $createRoom = document.getElementById('createRoom');
+const $newRoomInput = document.getElementById('newRoomInput');
+const $createRoomBtn = document.getElementById('createRoomBtn');
+const $cancelRoomBtn = document.getElementById('cancelRoomBtn');
+const $shareBtn = document.getElementById('shareBtn');
+
+$addRoomBtn.onclick = () => {
+    $createRoom.style.display = $createRoom.style.display === 'none' ? 'block' : 'none';
+    if ($createRoom.style.display === 'block') {
+        $newRoomInput.focus();
+    }
+};
+
+$createRoomBtn.onclick = () => {
+    const roomName = ($newRoomInput.value || '').trim();
+    if (roomName) {
+        socket.emit('room:create', { roomId: roomName });
+        $newRoomInput.value = '';
+        $createRoom.style.display = 'none';
+    }
+};
+
+$cancelRoomBtn.onclick = () => {
+    $newRoomInput.value = '';
+    $createRoom.style.display = 'none';
+};
+
+$newRoomInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        $createRoomBtn.onclick();
+    } else if (e.key === 'Escape') {
+        $cancelRoomBtn.onclick();
+    }
+});
+
+// Share room link
+$shareBtn.onclick = () => {
+    // Build clean URL - use current page URL as base
+    const currentUrl = new URL(window.location.href);
+    const url = new URL(currentUrl.origin + currentUrl.pathname);
+    
+    // Add room parameter if not global
+    if (state.room && state.room !== 'global') {
+        url.searchParams.set('room', state.room);
+    } else {
+        url.searchParams.delete('room');
+    }
+    
+    const link = url.toString();
+    
+    console.log('Sharing link:', link, 'for room:', state.room);
+    
+    // Try to copy to clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => {
+            const originalText = $shareBtn.textContent;
+            $shareBtn.textContent = '✓';
+            setTimeout(() => {
+                $shareBtn.textContent = originalText;
+            }, 2000);
+        }).catch(() => {
+            // Fallback
+            copyToClipboardFallback(link);
+        });
+    } else {
+        copyToClipboardFallback(link);
+    }
+};
+
+function copyToClipboardFallback(link) {
+    const textArea = document.createElement('textarea');
+    textArea.value = link;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        const originalText = $shareBtn.textContent;
+        $shareBtn.textContent = '✓';
+        setTimeout(() => {
+            $shareBtn.textContent = originalText;
+        }, 2000);
+    } catch (err) {
+        // Last resort - show prompt
+        prompt('Copy this link:', link);
+    }
+    document.body.removeChild(textArea);
+}
+
+// Check URL for room parameter on load
+function getRoomFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room');
+    console.log('Room from URL:', room);
+    return room || 'global';
+}
+
+// Handle browser back/forward buttons
+window.addEventListener('popstate', (e) => {
+    const roomFromURL = getRoomFromURL();
+    if (roomFromURL !== state.room) {
+        joinRoom(roomFromURL);
+    }
+});
+
+// Initialize: prompt for name and join room from URL
+let initialized = false;
+let nameEntered = false;
+
+function initializeApp() {
+    if (initialized) return;
+    
+    // Get name first (only once)
+    if (!nameEntered) {
+        const name = prompt('Enter your name:') || `user-${Math.random().toString(36).substr(2, 9)}`;
+        state.name = name.trim().slice(0, 32);
+        nameEntered = true;
+    }
+    
+    // Function to actually join the room
+    function doJoinRoom() {
+        if (initialized) return; // Prevent double initialization
+        initialized = true;
+        
+        const initialRoom = getRoomFromURL();
+        console.log('Initializing app, joining room from URL:', initialRoom);
+        joinRoom(initialRoom);
+    }
+    
+    // Wait for socket connection
+    if (socket.connected) {
+        // Socket already connected, wait a bit for rooms list
+        setTimeout(doJoinRoom, 300);
+    } else {
+        socket.once('connect', () => {
+            console.log('Socket connected, waiting for rooms list...');
+            // Wait for rooms list to be received
+            socket.once('rooms:list', () => {
+                setTimeout(doJoinRoom, 100);
+            });
+            // Fallback in case rooms:list was already received
+            setTimeout(doJoinRoom, 500);
+        });
+    }
+}
+
+// Initialize when page loads
+if (document.readyState === 'loading') {
+    window.addEventListener('load', () => {
+        setTimeout(initializeApp, 100);
+    });
+} else {
+    // Page already loaded
+    setTimeout(initializeApp, 100);
+}
+
+// Init default rooms
+renderRooms();
+    </script>
+</body>
+</html>

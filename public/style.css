@@ -1,0 +1,83 @@
+:root{
+    --bg:#ecf1f6; /* page bg */
+    --sidebar:#1f2937; /* dark slate */
+    --sidebar-2:#19212c; /* darker */
+    --line:#e3e8ef; /* separators */
+    --text:#0b1220; /* main text */
+    --muted:#6b7280; /* secondary */
+    --bubble:#f1f5f9; /* other bubble */
+    --bubble-me:#2ea0ff; /* my bubble */
+    --white:#fff;
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100%; margin:0; padding:0; overflow:hidden }
+    body{
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color:var(--text); background:var(--bg);
+    }
+    .app{
+    display:grid; grid-template-columns:280px 1fr; gap:0; width:100%; height:100vh; background:var(--white);
+    overflow:hidden;
+    }
+    /* Sidebar */
+    .sidebar{ background:linear-gradient(180deg, var(--sidebar), var(--sidebar-2)); color:#f2f6ff; padding:20px; height:100%; overflow-y:auto; overflow-x:hidden }
+    .brand{ display:flex; align-items:center; gap:12px; font-weight:700; font-size:18px; margin-bottom:16px }
+    .brand-icon{ width:28px; height:28px; border-radius:10px; background:linear-gradient(135deg,#3fb7ff,#22d3ee); box-shadow: 0 6px 16px rgba(47,150,255,.35); }
+    .brand-name{ letter-spacing:.2px }
+    .group{ margin:12px 0 }
+    .group-head{ display:flex; align-items:center; justify-content:space-between; color:#cbd5e1; font-weight:600; font-size:13px; text-transform:none; margin-bottom:8px }
+    .chev{ background:transparent; border:0; color:#94a3b8; cursor:pointer }
+    .add-room-btn{ background:rgba(59,130,246,.2); border:1px solid rgba(59,130,246,.3); color:#60a5fa; width:24px; height:24px; border-radius:6px; cursor:pointer; font-size:18px; line-height:1; display:flex; align-items:center; justify-content:center; padding:0 }
+    .add-room-btn:hover{ background:rgba(59,130,246,.3); border-color:rgba(59,130,246,.5) }
+    .room-list{ display:flex; flex-direction:column; gap:6px }
+    .room{ text-align:left; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,.06); background:rgba(255,255,255,.02); color:#e5edf8; cursor:pointer }
+    .room:hover{ background:rgba(255,255,255,.06) }
+    .room.active{ background:#3b82f6; color:#fff; border-color:#3b82f6; box-shadow:0 8px 18px rgba(59,130,246,.35) }
+    .create-room{ margin-top:8px; padding:10px; background:rgba(255,255,255,.04); border-radius:8px; border:1px solid rgba(255,255,255,.08) }
+    .new-room-input{ width:100%; padding:8px 10px; border-radius:6px; border:1px solid rgba(255,255,255,.1); background:rgba(0,0,0,.2); color:#e5edf8; font-size:13px; outline:none; margin-bottom:8px }
+    .new-room-input:focus{ border-color:rgba(59,130,246,.5); background:rgba(0,0,0,.3) }
+    .new-room-input::placeholder{ color:#94a3b8 }
+    .room-actions{ display:flex; gap:6px }
+    .room-action-btn{ flex:1; padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,.1); background:rgba(59,130,246,.2); color:#60a5fa; cursor:pointer; font-size:12px; font-weight:600 }
+    .room-action-btn:hover{ background:rgba(59,130,246,.3) }
+    .room-action-btn.cancel{ background:rgba(255,255,255,.05); color:#94a3b8 }
+    .room-action-btn.cancel:hover{ background:rgba(255,255,255,.1) }
+    hr{ border:0; height:1px; background:rgba(255,255,255,.12); margin:16px 0 }
+    .user-list{ display:flex; flex-direction:column; gap:8px }
+    .user{ display:flex; align-items:center; gap:8px; color:#e5edf8; font-size:14px }
+    .user .dot{ width:8px; height:8px; border-radius:999px; background:#34d399; box-shadow:0 0 0 4px rgba(52,211,153,.15) }
+    
+    /* Main */
+    .main{ display:flex; flex-direction:column; background:var(--white); height:100%; overflow:hidden }
+    .chat-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line); background:#fff; flex-shrink:0 }
+    .chat-head h1{ font-size:28px; margin:0 }
+    .share-btn{ border:0; background:#f1f5f9; width:36px; height:36px; border-radius:10px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center }
+    .share-btn:hover{ background:#e2e8f0 }
+    .gear{ border:0; background:#f1f5f9; width:36px; height:36px; border-radius:10px; cursor:pointer }
+    .messages{ flex:1; padding:18px; display:flex; flex-direction:column; gap:14px; background:linear-gradient(180deg,#fafcff,#f3f7fb); overflow-y:auto; overflow-x:hidden }
+    
+    .msg{ max-width:68%; padding:10px 12px; border-radius:16px; position:relative; box-shadow: 0 4px 10px rgba(0,0,0,.06); }
+    .msg.other{ align-self:flex-start; background:var(--bubble); color:#0b1220 }
+    .msg.me{ align-self:flex-end; background:var(--bubble-me); color:#fff }
+    .msg.me::after{ content:''; position:absolute; right:-6px; bottom:10px; border-left:8px solid var(--bubble-me); border-top:8px solid transparent; border-bottom:8px solid transparent; }
+    .msg.other::before{ content:''; position:absolute; left:-6px; bottom:10px; border-right:8px solid var(--bubble); border-top:8px solid transparent; border-bottom:8px solid transparent; }
+    .msg-meta{ font-size:12px; opacity:.9; margin-bottom:4px }
+    .msg-meta .name{ font-weight:700 }
+    .msg-meta .time{ color:#64748b }
+    .msg-text{ font-size:15px; line-height:1.35 }
+    
+    .typing{ min-height:18px; color:#64748b; font-size:12px; padding:0 18px 6px }
+    
+    .composer{ display:flex; align-items:center; gap:10px; padding:12px; border-top:1px solid var(--line); background:#fff; flex-shrink:0 }
+    .icon-btn{ width:40px; height:40px; border-radius:20px; border:1px solid #d7e0ec; background:#fff; cursor:pointer }
+    .input{ flex:1; height:42px; padding:0 14px; border-radius:12px; border:1px solid #d7e0ec; outline:none }
+    .input:focus{ border-color:#93c5fd; box-shadow:0 0 0 3px rgba(147,197,253,.35) }
+    .send{ display:flex; align-items:center; justify-content:center; gap:8px; height:42px; padding:0 16px; border-radius:12px; border:0; background:linear-gradient(135deg,#3fb7ff,#2ea0ff); color:#fff; font-weight:700; cursor:pointer; box-shadow:0 8px 20px rgba(63,183,255,.35) }
+    .send:hover{ transform:translateY(-1px) }
+    
+    /* Modal */
+    .modal{ position:fixed; inset:0; background:rgba(9,15,25,.5); display:flex; align-items:center; justify-content:center }
+    .panel{ width:min(92%,460px); background:#0f1626; color:#e8eefc; border:1px solid #1e2a46; border-radius:16px; padding:18px }
+    .panel h2{ margin:0 0 8px }
+    .subtle{ color:#aab2c8; margin-top:0 }
+    
