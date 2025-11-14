@@ -55,7 +55,27 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-const socket = io();
+// Connect to socket.io - use current host in production
+const socket = io(window.location.origin, {
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: 5
+});
+
+socket.on('connect', () => {
+    console.log('Socket connected successfully');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', error);
+    alert('Failed to connect to chat server. Please refresh the page.');
+});
+
+socket.on('disconnect', () => {
+    console.log('Socket disconnected');
+});
+
 const $users = document.getElementById('users');
 const $onlineCount = document.getElementById('onlineCount');
 const $rooms = document.getElementById('rooms');

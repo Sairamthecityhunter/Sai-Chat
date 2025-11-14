@@ -7,12 +7,25 @@ const { customAlphabet } = require('nanoid');
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 
+const path = require('path');
+
 const app = express();
 app.use(cors());
-app.use(express.static('public'));
 
 // Optional health check
 app.get('/health', (_req, res) => res.send('ok'));
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve index.html for all other routes (SPA support) - must be last
+app.use((req, res) => {
+  // Don't serve index.html for socket.io or other API routes
+  if (req.path.startsWith('/socket.io') || req.path.startsWith('/health')) {
+    return res.status(404).send('Not found');
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
