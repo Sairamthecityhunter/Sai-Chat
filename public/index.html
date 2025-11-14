@@ -39,8 +39,45 @@
             <div class="chat-head">
                 <h1 id="roomTitle"># global</h1>
                 <div style="display:flex; gap:8px; align-items:center;">
-                    <button class="share-btn" id="shareBtn" title="Copy room link">🔗</button>
+                    <button class="share-btn" id="shareBtn" title="Share chat">🔗 Share</button>
                     <button class="gear">⚙️</button>
+                </div>
+            </div>
+            
+            <!-- Share Modal -->
+            <div class="modal" id="shareModal" style="display:none;">
+                <div class="panel">
+                    <h2>Share Sai Chat</h2>
+                    <p class="subtle">Invite your friends to join the chat!</p>
+                    
+                    <div class="share-options">
+                        <div class="share-input-group">
+                            <input type="text" id="shareUrlInput" readonly class="share-url-input">
+                            <button class="copy-btn" id="copyUrlBtn">Copy</button>
+                        </div>
+                        
+                        <div class="social-share">
+                            <p style="margin:16px 0 8px; color:#aab2c8; font-size:13px;">Share on:</p>
+                            <div class="social-buttons">
+                                <button class="social-btn whatsapp" onclick="shareOnWhatsApp()" title="Share on WhatsApp">
+                                    <span>💬</span> WhatsApp
+                                </button>
+                                <button class="social-btn facebook" onclick="shareOnFacebook()" title="Share on Facebook">
+                                    <span>📘</span> Facebook
+                                </button>
+                                <button class="social-btn twitter" onclick="shareOnTwitter()" title="Share on Twitter">
+                                    <span>🐦</span> Twitter
+                                </button>
+                                <button class="social-btn email" onclick="shareViaEmail()" title="Share via Email">
+                                    <span>📧</span> Email
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button class="modal-btn" onclick="closeShareModal()">Close</button>
+                    </div>
                 </div>
             </div>
             <div class="messages" id="messages"></div>
@@ -295,9 +332,12 @@ $newRoomInput.addEventListener('keypress', (e) => {
     }
 });
 
-// Share room link
-$shareBtn.onclick = () => {
-    // Build clean URL - use current page URL as base
+// Share functionality
+const $shareModal = document.getElementById('shareModal');
+const $shareUrlInput = document.getElementById('shareUrlInput');
+const $copyUrlBtn = document.getElementById('copyUrlBtn');
+
+function getShareUrl() {
     const currentUrl = new URL(window.location.href);
     const url = new URL(currentUrl.origin + currentUrl.pathname);
     
@@ -308,26 +348,70 @@ $shareBtn.onclick = () => {
         url.searchParams.delete('room');
     }
     
-    const link = url.toString();
-    
-    console.log('Sharing link:', link, 'for room:', state.room);
-    
-    // Try to copy to clipboard
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(link).then(() => {
-            const originalText = $shareBtn.textContent;
-            $shareBtn.textContent = '✓';
-            setTimeout(() => {
-                $shareBtn.textContent = originalText;
-            }, 2000);
-        }).catch(() => {
-            // Fallback
-            copyToClipboardFallback(link);
-        });
-    } else {
-        copyToClipboardFallback(link);
+    return url.toString();
+}
+
+function openShareModal() {
+    const shareUrl = getShareUrl();
+    $shareUrlInput.value = shareUrl;
+    $shareModal.style.display = 'flex';
+}
+
+function closeShareModal() {
+    $shareModal.style.display = 'none';
+}
+
+// Close modal when clicking outside
+$shareModal.onclick = (e) => {
+    if (e.target === $shareModal) {
+        closeShareModal();
     }
 };
+
+// Copy URL button
+$copyUrlBtn.onclick = () => {
+    const shareUrl = getShareUrl();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            $copyUrlBtn.textContent = '✓ Copied!';
+            setTimeout(() => {
+                $copyUrlBtn.textContent = 'Copy';
+            }, 2000);
+        }).catch(() => {
+            copyToClipboardFallback(shareUrl);
+        });
+    } else {
+        copyToClipboardFallback(shareUrl);
+    }
+};
+
+// Share button opens modal
+$shareBtn.onclick = openShareModal;
+
+// Social sharing functions
+function shareOnWhatsApp() {
+    const url = getShareUrl();
+    const text = `Join me on Sai Chat! ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+}
+
+function shareOnFacebook() {
+    const url = encodeURIComponent(getShareUrl());
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+}
+
+function shareOnTwitter() {
+    const url = encodeURIComponent(getShareUrl());
+    const text = encodeURIComponent('Join me on Sai Chat!');
+    window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+}
+
+function shareViaEmail() {
+    const url = getShareUrl();
+    const subject = encodeURIComponent('Join me on Sai Chat!');
+    const body = encodeURIComponent(`Hey! Join me on Sai Chat:\n\n${url}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
 
 function copyToClipboardFallback(link) {
     const textArea = document.createElement('textarea');
