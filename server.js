@@ -12,6 +12,9 @@ const path = require('path');
 const app = express();
 app.use(cors());
 
+// Trust proxy for Railway (important for HTTPS)
+app.set('trust proxy', 1);
+
 // Optional health check
 app.get('/health', (_req, res) => res.send('ok'));
 
