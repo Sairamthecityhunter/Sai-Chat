@@ -320,20 +320,37 @@ $fileInput.addEventListener('change', (e) => {
     // Check if it's an image
     if (!file.type.startsWith('image/')) {
         alert('Please select an image file');
+        $fileInput.value = '';
         return;
     }
     
     // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
         alert('Image size must be less than 5MB');
+        $fileInput.value = '';
         return;
     }
+    
+    // Show loading state
+    $attachBtn.style.opacity = '0.6';
+    $attachBtn.textContent = '⏳';
     
     // Read image as base64
     const reader = new FileReader();
     reader.onload = (event) => {
         state.pendingImage = event.target.result;
         showImagePreview(event.target.result);
+        $attachBtn.style.opacity = '1';
+        $attachBtn.textContent = '📎';
+        // Visual indicator that image is ready
+        $attachBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+        $attachBtn.style.color = '#fff';
+    };
+    reader.onerror = () => {
+        alert('Error reading image file');
+        $attachBtn.style.opacity = '1';
+        $attachBtn.textContent = '📎';
+        $fileInput.value = '';
     };
     reader.readAsDataURL(file);
 });
@@ -350,6 +367,9 @@ window.closeImagePreview = function() {
     $imagePreviewModal.style.display = 'none';
     state.pendingImage = null;
     $fileInput.value = '';
+    // Reset attach button style
+    $attachBtn.style.background = '';
+    $attachBtn.style.color = '';
 };
 
 window.sendImageMessage = function() {
@@ -366,6 +386,10 @@ window.sendImageMessage = function() {
     $fileInput.value = '';
     closeImagePreview();
     socket.emit('typing', false);
+    
+    // Reset attach button style
+    $attachBtn.style.background = '';
+    $attachBtn.style.color = '';
 };
 
 // Close image preview modal when clicking outside
