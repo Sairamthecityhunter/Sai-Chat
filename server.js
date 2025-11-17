@@ -12,7 +12,7 @@ const path = require('path');
 const app = express();
 app.use(cors());
 
-// Trust proxy for Railway (important for HTTPS)
+// Trust proxy for Railway (important for HTTPS and correct headers)
 app.set('trust proxy', 1);
 
 // Optional health check

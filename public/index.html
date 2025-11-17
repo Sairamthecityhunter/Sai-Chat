@@ -3,8 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sai Chat</title>
+    <title>Sai Chat - Professional Real-Time Chat</title>
+    <meta name="description" content="Professional real-time chat application with rooms, sharing, and instant messaging">
     <link rel="stylesheet" href="/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app">
@@ -12,6 +16,7 @@
             <div class="brand">
                 <div class="brand-icon"></div>
                 <div class="brand-name">Sai Chat</div>
+                <div style="font-size:10px; color:#64748b; font-weight:400; margin-top:2px; letter-spacing:0.5px;">PRO</div>
             </div>
             <div class="group">
                 <div class="group-head">
@@ -39,8 +44,10 @@
             <div class="chat-head">
                 <h1 id="roomTitle"># global</h1>
                 <div style="display:flex; gap:8px; align-items:center;">
-                    <button class="share-btn" id="shareBtn" title="Share chat">🔗 Share</button>
-                    <button class="gear">⚙️</button>
+                    <button class="share-btn" id="shareBtn" title="Share chat">
+                        <span>🔗</span> Share
+                    </button>
+                    <button class="gear" title="Settings">⚙️</button>
                 </div>
             </div>
             
@@ -229,14 +236,12 @@ function joinRoom(roomId) {
     
     $messages.innerHTML = '';
     
-    // Update URL without page reload
+    // Update URL without page reload - always include room for sharing
     const url = new URL(window.location);
-    if (sanitized !== 'global') {
-        url.searchParams.set('room', sanitized);
-    } else {
-        url.searchParams.delete('room');
-    }
+    url.searchParams.set('room', sanitized);
     window.history.pushState({ room: sanitized }, '', url);
+    
+    console.log('Updated URL to:', url.toString());
 }
 
 let typingTimer;
@@ -342,17 +347,21 @@ const $shareUrlInput = document.getElementById('shareUrlInput');
 const $copyUrlBtn = document.getElementById('copyUrlBtn');
 
 function getShareUrl() {
-    const currentUrl = new URL(window.location.href);
-    const url = new URL(currentUrl.origin + currentUrl.pathname);
+    // Get the current origin (works for both localhost and production)
+    const origin = window.location.origin;
+    const pathname = window.location.pathname || '/';
     
-    // Add room parameter if not global
-    if (state.room && state.room !== 'global') {
+    // Create clean URL
+    const url = new URL(origin + pathname);
+    
+    // Always include room parameter for clarity (even if global)
+    if (state.room) {
         url.searchParams.set('room', state.room);
-    } else {
-        url.searchParams.delete('room');
     }
     
-    return url.toString();
+    const shareUrl = url.toString();
+    console.log('Generated share URL:', shareUrl);
+    return shareUrl;
 }
 
 function openShareModal() {
@@ -375,13 +384,20 @@ $shareModal.onclick = (e) => {
 // Copy URL button
 $copyUrlBtn.onclick = () => {
     const shareUrl = getShareUrl();
+    console.log('Copying URL:', shareUrl);
+    
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(shareUrl).then(() => {
             $copyUrlBtn.textContent = '✓ Copied!';
+            // Show success message
+            const originalText = $copyUrlBtn.textContent;
             setTimeout(() => {
                 $copyUrlBtn.textContent = 'Copy';
             }, 2000);
-        }).catch(() => {
+            // Also show alert for confirmation
+            alert('Link copied to clipboard!\n\n' + shareUrl);
+        }).catch((err) => {
+            console.error('Clipboard error:', err);
             copyToClipboardFallback(shareUrl);
         });
     } else {
@@ -443,7 +459,16 @@ function copyToClipboardFallback(link) {
 // Check URL for room parameter on load
 function getRoomFromURL() {
     const params = new URLSearchParams(window.location.search);
-    const room = params.get('room');
+    let room = params.get('room');
+    
+    // Also check hash if search params don't have it
+    if (!room && window.location.hash) {
+        const hashMatch = window.location.hash.match(/room=([^&]+)/);
+        if (hashMatch) {
+            room = hashMatch[1];
+        }
+    }
+    
     console.log('Room from URL:', room);
     return room || 'global';
 }
@@ -477,14 +502,22 @@ function initializeApp() {
         
         const initialRoom = getRoomFromURL();
         console.log('Initializing app, joining room from URL:', initialRoom);
-        joinRoom(initialRoom);
+        console.log('Current URL:', window.location.href);
+        
+        // Ensure we have a valid room
+        if (!initialRoom || initialRoom === 'undefined' || initialRoom === 'null') {
+            console.log('Invalid room from URL, using global');
+            joinRoom('global');
+        } else {
+            joinRoom(initialRoom);
+        }
     }
     
     // Wait for socket connection
-    if (socket.connected) {
+    if (socket && socket.connected) {
         // Socket already connected, wait a bit for rooms list
         setTimeout(doJoinRoom, 300);
-    } else {
+    } else if (socket) {
         socket.once('connect', () => {
             console.log('Socket connected, waiting for rooms list...');
             // Wait for rooms list to be received
@@ -494,6 +527,15 @@ function initializeApp() {
             // Fallback in case rooms:list was already received
             setTimeout(doJoinRoom, 500);
         });
+    } else {
+        // Socket not initialized yet, wait a bit
+        setTimeout(() => {
+            if (socket && socket.connected) {
+                doJoinRoom();
+            } else if (socket) {
+                socket.once('connect', doJoinRoom);
+            }
+        }, 1000);
     }
 }
 
