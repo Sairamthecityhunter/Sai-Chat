@@ -171,12 +171,27 @@ io.on('connection', (socket) => {
 
     let text = (raw && raw.text ? String(raw.text) : '').slice(0, 2000);
     text = filterBadWords(text);
-    if (!text.trim()) return;
+    
+    // Handle image uploads
+    let image = null;
+    if (raw && raw.image && typeof raw.image === 'string') {
+      // Validate base64 image
+      if (raw.image.startsWith('data:image/')) {
+        // Limit image size (5MB in base64 is roughly 6.67MB in original)
+        if (raw.image.length < 7000000) { // ~5MB base64
+          image = raw.image;
+        }
+      }
+    }
+    
+    // Must have either text or image
+    if (!text.trim() && !image) return;
 
     const msg = {
       id: nanoid(),
       user: { name: socket.data.name },
-      text,
+      text: text || null,
+      image: image || null,
       ts: Date.now(),
       roomId
     };

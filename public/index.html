@@ -90,9 +90,22 @@
             <div class="messages" id="messages"></div>
             <div class="typing" id="typing"></div>
             <div class="composer">
-                <button class="icon-btn">📎</button>
+                <input type="file" id="fileInput" accept="image/*" style="display:none;" multiple>
+                <button class="icon-btn" id="attachBtn" title="Attach image">📎</button>
                 <input type="text" class="input" id="input" placeholder="Type a message...">
                 <button class="send" id="send">Send</button>
+            </div>
+            
+            <!-- Image Preview Modal -->
+            <div class="modal" id="imagePreviewModal" style="display:none;">
+                <div class="panel" style="max-width:600px;">
+                    <h2>Image Preview</h2>
+                    <div id="imagePreviewContainer" style="margin:20px 0; text-align:center;"></div>
+                    <div class="modal-actions">
+                        <button class="modal-btn" onclick="closeImagePreview()">Cancel</button>
+                        <button class="modal-btn" style="background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; border:0;" onclick="sendImageMessage()">Send Image</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -138,23 +151,56 @@ const state = {
     room: 'global',
     name: '',
     typingBy: new Set(),
-    allRooms: []
+    allRooms: [],
+    pendingImage: null
 };
 
 function addMessage(msg) {
     const el = document.createElement('div');
     el.className = 'msg ' + (msg.user.name === state.name ? 'me' : 'other');
     const time = new Date(msg.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    
+    let content = '';
+    if (msg.image) {
+        // Escape the image src for security
+        const imageSrc = escapeHtml(msg.image);
+        content = `<div class="msg-image-container">
+            <img src="${imageSrc}" alt="Shared image" class="msg-image" onclick="openImageModal('${imageSrc.replace(/'/g, "\\'")}')">
+        </div>`;
+    }
+    if (msg.text) {
+        content += `<div class="msg-text">${escapeHtml(msg.text)}</div>`;
+    }
+    
     el.innerHTML = `
         <div class="msg-meta">
             <span class="name">${escapeHtml(msg.user.name)}</span>
             <span class="time">${time}</span>
         </div>
-        <div class="msg-text">${escapeHtml(msg.text)}</div>
+        ${content}
     `;
     $messages.appendChild(el);
     autoscroll();
 }
+
+// Image modal for full view (make it global)
+window.openImageModal = function(imageSrc) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '2000';
+    const escapedSrc = escapeHtml(imageSrc);
+    modal.innerHTML = `
+        <div class="panel" style="max-width:90vw; max-height:90vh; padding:20px; background:rgba(15,23,42,.95); border:1px solid rgba(255,255,255,.1);">
+            <img src="${escapedSrc}" style="max-width:100%; max-height:80vh; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.5); cursor:pointer;" onclick="this.closest('.modal').remove()">
+            <button class="modal-btn" style="margin-top:16px; background:rgba(0,0,0,.7); color:#fff; width:100%;" onclick="this.closest('.modal').remove()">Close</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.onclick = (e) => {
+        if (e.target === modal) modal.remove();
+    };
+};
 
 function autoscroll(){
     $messages.scrollTop = $messages.scrollHeight;
@@ -257,7 +303,85 @@ $input.addEventListener('keypress', (e) => {
     }
 });
 
+// File upload handling
+const $fileInput = document.getElementById('fileInput');
+const $attachBtn = document.getElementById('attachBtn');
+const $imagePreviewModal = document.getElementById('imagePreviewModal');
+const $imagePreviewContainer = document.getElementById('imagePreviewContainer');
+
+$attachBtn.onclick = () => {
+    $fileInput.click();
+};
+
+$fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Check if it's an image
+    if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+    }
+    
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+    }
+    
+    // Read image as base64
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        state.pendingImage = event.target.result;
+        showImagePreview(event.target.result);
+    };
+    reader.readAsDataURL(file);
+});
+
+function showImagePreview(imageSrc) {
+    $imagePreviewContainer.innerHTML = `
+        <img src="${imageSrc}" style="max-width:100%; max-height:400px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.2);">
+        <p style="margin-top:12px; color:#94a3b8; font-size:13px;">Preview your image before sending</p>
+    `;
+    $imagePreviewModal.style.display = 'flex';
+}
+
+window.closeImagePreview = function() {
+    $imagePreviewModal.style.display = 'none';
+    state.pendingImage = null;
+    $fileInput.value = '';
+};
+
+window.sendImageMessage = function() {
+    if (!state.pendingImage) return;
+    
+    const text = ($input.value || '').trim();
+    socket.emit('message', { 
+        text: text || '📷 Image',
+        image: state.pendingImage 
+    });
+    
+    $input.value = '';
+    state.pendingImage = null;
+    $fileInput.value = '';
+    closeImagePreview();
+    socket.emit('typing', false);
+};
+
+// Close image preview modal when clicking outside
+$imagePreviewModal.onclick = (e) => {
+    if (e.target === $imagePreviewModal) {
+        closeImagePreview();
+    }
+};
+
 $send.onclick = () => {
+    // If there's a pending image, send it
+    if (state.pendingImage) {
+        sendImageMessage();
+        return;
+    }
+    
     const text = ($input.value || '').trim();
     if (!text) return;
     socket.emit('message', { text });
