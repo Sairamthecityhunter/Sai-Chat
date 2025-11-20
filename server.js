@@ -238,9 +238,15 @@ cleanupOldMessages();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-server.listen(PORT, HOST, () => {
-  const protocol = process.env.RAILWAY_ENVIRONMENT ? 'https' : 'http';
-  const hostname = process.env.RAILWAY_PUBLIC_DOMAIN || HOST;
-  console.log(`✓ Chat server running on ${protocol}://${hostname}:${PORT}`);
-  console.log(`✓ Server is ready to accept connections`);
-});
+// Export for Vercel serverless functions
+if (process.env.VERCEL) {
+  module.exports = server;
+} else {
+  // Traditional server startup for Railway, Render, etc.
+  server.listen(PORT, HOST, () => {
+    const protocol = process.env.RAILWAY_ENVIRONMENT ? 'https' : 'http';
+    const hostname = process.env.RAILWAY_PUBLIC_DOMAIN || HOST;
+    console.log(`✓ Chat server running on ${protocol}://${hostname}:${PORT}`);
+    console.log(`✓ Server is ready to accept connections`);
+  });
+}
