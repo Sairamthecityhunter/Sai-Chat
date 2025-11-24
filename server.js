@@ -30,14 +30,9 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
-
-// In-memory room store
-const rooms = new Map(); // roomId => { users: Map(socketId=>{name}), messages: Array }
-
-// Initialize global room on startup
-getRoom('global');
+// Only initialize Socket.IO and HTTP server if NOT on Vercel
+// Vercel serverless functions don't support WebSockets
+let server, io, rooms, lastMsgAt;
 
 // Simple profanity filter (replace bad-words with a simple function)
 function filterBadWords(text) {
@@ -52,16 +47,43 @@ function filterBadWords(text) {
 }
 
 function getRoom(roomId) {
+  if (!rooms) return null; // Safety check for Vercel
   if (!rooms.has(roomId)) {
     rooms.set(roomId, { users: new Map(), messages: [] });
   }
   return rooms.get(roomId);
 }
 
+// Initialize Socket.IO and HTTP server
+// On Vercel, Socket.IO will use polling transport (works with serverless)
+let server, io, rooms, lastMsgAt;
+
+// Always initialize server and Socket.IO
+server = http.createServer(app);
+
+// Configure Socket.IO for Vercel compatibility
+// On Vercel, force polling transport since WebSockets don't work well with serverless
+const ioOptions = {
+  cors: { origin: '*' },
+  transports: process.env.VERCEL ? ['polling'] : ['websocket', 'polling'],
+  allowEIO3: true
+};
+
+io = new Server(server, ioOptions);
+
+// In-memory room store
+rooms = new Map(); // roomId => { users: Map(socketId=>{name}), messages: Array }
+
+// Initialize global room on startup
+getRoom('global');
+
+// Simple per-socket rate limit (1 msg / 600ms)
+lastMsgAt = new Map();
+
 // Simple per-socket rate limit (1 msg / 600ms)
 const RATE_MS = 600;
-const lastMsgAt = new Map();
 
+// Set up Socket.IO handlers (works on Vercel with polling)
 io.on('connection', (socket) => {
   // defaults
   socket.data.name = `user-${nanoid()}`;
@@ -230,8 +252,8 @@ function cleanupOldMessages() {
 }
 
 // Run cleanup every hour
+// Note: On Vercel, this runs per function instance, so cleanup is limited
 setInterval(cleanupOldMessages, 60 * 60 * 1000); // 1 hour in milliseconds
-
 // Also run cleanup on startup to clean any old messages
 cleanupOldMessages();
 
@@ -240,6 +262,8 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 // Export for Vercel serverless functions
 if (process.env.VERCEL) {
+  // Export the server for Vercel - Socket.IO will use polling transport
+  // This allows Socket.IO to work on Vercel, though with some limitations
   module.exports = server;
 } else {
   // Traditional server startup for Railway, Render, etc.

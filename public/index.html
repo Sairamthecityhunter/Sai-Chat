@@ -115,13 +115,19 @@
 // Connect to socket.io - use current host in production
 // Force HTTPS in production if available
 const socketUrl = window.location.origin;
+// On Vercel, prefer polling transport (works better with serverless)
+// On other platforms, prefer websocket with polling fallback
+const isVercel = window.location.hostname.includes('vercel.app');
 const socket = io(socketUrl, {
-    transports: ['websocket', 'polling'],
+    transports: isVercel ? ['polling', 'websocket'] : ['websocket', 'polling'],
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionAttempts: 5,
     secure: window.location.protocol === 'https:',
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    // Force polling upgrade delay on Vercel
+    upgrade: !isVercel,
+    rememberUpgrade: false
 });
 
 socket.on('connect', () => {

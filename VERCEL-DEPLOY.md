@@ -4,6 +4,8 @@
 
 ✅ **ERR_REQUIRE_ESM Error**: Fixed by downgrading `nanoid` from v5 to v4 (v4 supports CommonJS `require()`)
 
+⚠️ **IMPORTANT LIMITATION**: Socket.IO WebSockets do NOT work on Vercel serverless functions. The app will deploy and serve static files, but real-time chat features will not work. For full Socket.IO support, deploy to **Railway** or **Render** instead (see `VERCEL-LIMITATIONS.md`).
+
 ## Deployment Steps
 
 ### 1. Install Vercel CLI (if not already installed)
