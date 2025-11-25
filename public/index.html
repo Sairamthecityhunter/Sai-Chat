@@ -1,710 +1,364 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sai Chat - Professional Real-Time Chat</title>
-    <meta name="description" content="Professional real-time chat application with rooms, sharing, and instant messaging">
-    <link rel="stylesheet" href="/style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pro Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div class="app">
-        <div class="sidebar">
-            <div class="brand">
-                <div class="brand-icon"></div>
-                <div class="brand-name">Sai Chat</div>
-                <div style="font-size:10px; color:#64748b; font-weight:400; margin-top:2px; letter-spacing:0.5px;">PRO</div>
-            </div>
-            <div class="group">
-                <div class="group-head">
-                    <span>Rooms</span>
-                    <button class="add-room-btn" id="addRoomBtn" title="Create new room">+</button>
-                </div>
-                <div class="room-list" id="rooms"></div>
-                <div class="create-room" id="createRoom" style="display:none;">
-                    <input type="text" id="newRoomInput" placeholder="Room name..." class="new-room-input">
-                    <div class="room-actions">
-                        <button class="room-action-btn" id="createRoomBtn">Create</button>
-                        <button class="room-action-btn cancel" id="cancelRoomBtn">Cancel</button>
-                    </div>
-                </div>
-            </div>
-            <hr>
-            <div class="group">
-                <div class="group-head">
-                    <span>Online (<span id="onlineCount">0</span>)</span>
-                </div>
-                <div class="user-list" id="users"></div>
-            </div>
+  <div class="app-container">
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen active">
+      <div class="glass-panel login-panel">
+        <div class="logo">
+          <div class="logo-icon">💬</div>
+          <h1>Pro Chat</h1>
         </div>
-        <div class="main">
-            <div class="chat-head">
-                <h1 id="roomTitle"># global</h1>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <button class="share-btn" id="shareBtn" title="Share chat">
-                        <span>🔗</span> Share
-                    </button>
-                    <button class="gear" title="Settings">⚙️</button>
-                </div>
+        <p class="subtitle">Join the conversation</p>
+        
+        <form id="join-form">
+          <div class="input-group">
+            <label for="username">Display Name</label>
+            <input type="text" id="username" placeholder="Enter your name" maxlength="32" required autocomplete="off">
+          </div>
+          
+          <div class="input-group">
+            <label for="room-select">Room</label>
+            <div class="room-input-wrapper">
+              <input type="text" id="room-input" placeholder="global" value="global" maxlength="50" autocomplete="off">
             </div>
-            
-            <!-- Share Modal -->
-            <div class="modal" id="shareModal" style="display:none;">
-                <div class="panel">
-                    <h2>Share Sai Chat</h2>
-                    <p class="subtle">Invite your friends to join the chat!</p>
-                    
-                    <div class="share-options">
-                        <div class="share-input-group">
-                            <input type="text" id="shareUrlInput" readonly class="share-url-input">
-                            <button class="copy-btn" id="copyUrlBtn">Copy</button>
-                        </div>
-                        
-                        <div class="social-share">
-                            <p style="margin:16px 0 8px; color:#aab2c8; font-size:13px;">Share on:</p>
-                            <div class="social-buttons">
-                                <button class="social-btn whatsapp" onclick="shareOnWhatsApp()" title="Share on WhatsApp">
-                                    <span>💬</span> WhatsApp
-                                </button>
-                                <button class="social-btn facebook" onclick="shareOnFacebook()" title="Share on Facebook">
-                                    <span>📘</span> Facebook
-                                </button>
-                                <button class="social-btn twitter" onclick="shareOnTwitter()" title="Share on Twitter">
-                                    <span>🐦</span> Twitter
-                                </button>
-                                <button class="social-btn email" onclick="shareViaEmail()" title="Share via Email">
-                                    <span>📧</span> Email
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="modal-actions">
-                        <button class="modal-btn" onclick="closeShareModal()">Close</button>
-                    </div>
-                </div>
+            <div class="room-suggestions" id="room-list">
+              <!-- Room chips will go here -->
             </div>
-            <div class="messages" id="messages"></div>
-            <div class="typing" id="typing"></div>
-            <div class="composer">
-                <input type="file" id="fileInput" accept="image/*" style="display:none;" multiple>
-                <button class="icon-btn" id="attachBtn" title="Attach image">📎</button>
-                <input type="text" class="input" id="input" placeholder="Type a message...">
-                <button class="send" id="send">Send</button>
-            </div>
-            
-            <!-- Image Preview Modal -->
-            <div class="modal" id="imagePreviewModal" style="display:none;">
-                <div class="panel" style="max-width:600px;">
-                    <h2>Image Preview</h2>
-                    <div id="imagePreviewContainer" style="margin:20px 0; text-align:center;"></div>
-                    <div class="modal-actions">
-                        <button class="modal-btn" onclick="closeImagePreview()">Cancel</button>
-                        <button class="modal-btn" style="background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; border:0;" onclick="sendImageMessage()">Send Image</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+          </div>
+
+          <button type="submit" class="btn-primary">
+            <span>Join Chat</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </form>
+      </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-// Connect to socket.io - use current host in production
-// Force HTTPS in production if available
-const socketUrl = window.location.origin;
-// On Vercel, prefer polling transport (works better with serverless)
-// On other platforms, prefer websocket with polling fallback
-const isVercel = window.location.hostname.includes('vercel.app');
-const socket = io(socketUrl, {
-    transports: isVercel ? ['polling', 'websocket'] : ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionAttempts: 5,
-    secure: window.location.protocol === 'https:',
-    rejectUnauthorized: false,
-    // Force polling upgrade delay on Vercel
-    upgrade: !isVercel,
-    rememberUpgrade: false
-});
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="screen">
+      <div class="chat-layout">
+        <!-- Sidebar (Desktop) -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <div class="logo-small">💬</div>
+            <h2>Pro Chat</h2>
+          </div>
+          
+          <div class="sidebar-section">
+            <h3>Current Room</h3>
+            <div class="current-room-badge">
+              <span class="status-dot"></span>
+              <span id="current-room-name">global</span>
+            </div>
+          </div>
 
-socket.on('connect', () => {
-    console.log('Socket connected successfully');
-});
+          <div class="sidebar-section">
+            <h3>Online Users (<span id="user-count">0</span>)</h3>
+            <ul id="users-list" class="users-list">
+              <!-- Users will be added here -->
+            </ul>
+          </div>
 
-socket.on('connect_error', (error) => {
-    console.error('Socket connection error:', error);
-    alert('Failed to connect to chat server. Please refresh the page.');
-});
+          <div class="sidebar-footer">
+            <button id="leave-btn" class="btn-secondary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              Leave Room
+            </button>
+          </div>
+        </aside>
 
-socket.on('disconnect', () => {
-    console.log('Socket disconnected');
-});
+        <!-- Main Chat Area -->
+        <main class="chat-main">
+          <header class="chat-header">
+            <button id="mobile-menu-btn" class="icon-btn mobile-only">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <div class="header-info">
+              <h2 id="header-room-name">#global</h2>
+              <span class="connection-status" id="connection-status">Connecting...</span>
+            </div>
+          </header>
 
-const $users = document.getElementById('users');
-const $onlineCount = document.getElementById('onlineCount');
-const $rooms = document.getElementById('rooms');
-const $roomTitle = document.getElementById('roomTitle');
-const $messages = document.getElementById('messages');
-const $input = document.getElementById('input');
-const $send = document.getElementById('send');
-const $typing = document.getElementById('typing');
+          <div id="messages-container" class="messages-container">
+            <div class="welcome-message">
+              <div class="welcome-icon">👋</div>
+              <h3>Welcome to Pro Chat!</h3>
+              <p>You've joined the <strong id="welcome-room-name">global</strong> room.</p>
+            </div>
+            <!-- Messages will be inserted here -->
+          </div>
 
-const state = {
-    users: [],
-    room: 'global',
-    name: '',
-    typingBy: new Set(),
-    allRooms: [],
-    pendingImage: null
-};
+          <div class="typing-indicator" id="typing-indicator">
+            <span>Someone is typing...</span>
+          </div>
 
-function addMessage(msg) {
-    const el = document.createElement('div');
-    el.className = 'msg ' + (msg.user.name === state.name ? 'me' : 'other');
-    const time = new Date(msg.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    
-    let content = '';
-    if (msg.image) {
-        // Escape the image src for security
-        const imageSrc = escapeHtml(msg.image);
-        content = `<div class="msg-image-container">
-            <img src="${imageSrc}" alt="Shared image" class="msg-image" onclick="openImageModal('${imageSrc.replace(/'/g, "\\'")}')">
-        </div>`;
-    }
-    if (msg.text) {
-        content += `<div class="msg-text">${escapeHtml(msg.text)}</div>`;
-    }
-    
-    el.innerHTML = `
-        <div class="msg-meta">
-            <span class="name">${escapeHtml(msg.user.name)}</span>
-            <span class="time">${time}</span>
-        </div>
-        ${content}
-    `;
-    $messages.appendChild(el);
-    autoscroll();
-}
+          <div class="chat-input-area">
+            <form id="message-form">
+              <div class="input-wrapper">
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                <label for="image-upload" class="icon-btn upload-btn" title="Upload Image">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                  <input type="file" id="image-upload" accept="image/*" hidden>
+                </label>
+              </div>
+              <button type="submit" class="btn-send">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            </form>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
 
-// Image modal for full view (make it global)
-window.openImageModal = function(imageSrc) {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.style.zIndex = '2000';
-    const escapedSrc = escapeHtml(imageSrc);
-    modal.innerHTML = `
-        <div class="panel" style="max-width:90vw; max-height:90vh; padding:20px; background:rgba(15,23,42,.95); border:1px solid rgba(255,255,255,.1);">
-            <img src="${escapedSrc}" style="max-width:100%; max-height:80vh; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.5); cursor:pointer;" onclick="this.closest('.modal').remove()">
-            <button class="modal-btn" style="margin-top:16px; background:rgba(0,0,0,.7); color:#fff; width:100%;" onclick="this.closest('.modal').remove()">Close</button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    modal.onclick = (e) => {
-        if (e.target === modal) modal.remove();
-    };
-};
+  <!-- Mobile Sidebar Overlay -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
-function autoscroll(){
-    $messages.scrollTop = $messages.scrollHeight;
-}
-
-function setUsers(list){
-    state.users = list;
-    $users.innerHTML = '';
-    list.forEach(u => {
-        const el = document.createElement('div');
-        el.className = 'user';
-        el.innerHTML = `<span class="dot"></span><span>${escapeHtml(u.name)}</span>`;
-        $users.appendChild(el);
+  <script>
+    // Client-side logic
+    const socket = io({
+      transports: ['polling', 'websocket'], // Prefer polling for Vercel stability
+      reconnectionAttempts: 5
     });
-    $onlineCount.textContent = list.length;
-}
 
-function renderRooms(){
-    $rooms.innerHTML = '';
-    // Use the list of rooms from server, ensuring global and current room are included
-    const roomIds = [...new Set(['global', ...state.allRooms, state.room])].sort();
-    
-    // Put global first
-    const sortedRooms = [];
-    if (roomIds.includes('global')) {
-        sortedRooms.push('global');
-        roomIds.forEach(r => {
-            if (r !== 'global') sortedRooms.push(r);
-        });
-    } else {
-        sortedRooms.push(...roomIds);
-    }
-    
-    sortedRooms.forEach(r => {
-        const a = document.createElement('button');
-        a.className = 'room' + (r === state.room ? ' active' : '');
-        a.textContent = `# ${r}`;
-        a.onclick = () => {
-            joinRoom(r);
+    // DOM Elements
+    const loginScreen = document.getElementById('login-screen');
+    const chatScreen = document.getElementById('chat-screen');
+    const joinForm = document.getElementById('join-form');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const messagesContainer = document.getElementById('messages-container');
+    const roomInput = document.getElementById('room-input');
+    const roomList = document.getElementById('room-list');
+    const usersList = document.getElementById('users-list');
+    const userCount = document.getElementById('user-count');
+    const currentRoomName = document.getElementById('current-room-name');
+    const headerRoomName = document.getElementById('header-room-name');
+    const welcomeRoomName = document.getElementById('welcome-room-name');
+    const connectionStatus = document.getElementById('connection-status');
+    const leaveBtn = document.getElementById('leave-btn');
+    const imageUpload = document.getElementById('image-upload');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    let myName = '';
+    let currentRoom = '';
+    let typingTimeout = null;
+
+    // Join Room
+    joinForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('username').value.trim();
+      const room = roomInput.value.trim() || 'global';
+      
+      if (name) {
+        myName = name;
+        currentRoom = room;
+        socket.emit('join', { name, roomId: room });
+        
+        loginScreen.classList.remove('active');
+        chatScreen.classList.add('active');
+        
+        // Update UI
+        currentRoomName.textContent = room;
+        headerRoomName.textContent = '#' + room;
+        welcomeRoomName.textContent = room;
+        
+        // Clear previous messages if re-joining
+        const welcomeMsg = messagesContainer.querySelector('.welcome-message');
+        messagesContainer.innerHTML = '';
+        if(welcomeMsg) messagesContainer.appendChild(welcomeMsg);
+      }
+    });
+
+    // Send Message
+    messageForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = messageInput.value.trim();
+      
+      if (text) {
+        socket.emit('message', { text });
+        messageInput.value = '';
+        socket.emit('typing', false);
+      }
+    });
+
+    // Image Upload
+    imageUpload.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) {
+          alert('Image too large (max 5MB)');
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          socket.emit('message', { image: evt.target.result });
         };
-        $rooms.appendChild(a);
+        reader.readAsDataURL(file);
+        e.target.value = ''; // reset
+      }
     });
-}
 
-function joinRoom(roomId) {
-    if (!socket.connected) {
-        console.log('Socket not connected, waiting...');
-        // Wait for connection
-        socket.once('connect', () => {
-            console.log('Socket connected, joining room');
-            joinRoom(roomId);
-        });
-        return;
+    // Typing Indicator
+    messageInput.addEventListener('input', () => {
+      socket.emit('typing', true);
+      
+      if (typingTimeout) clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        socket.emit('typing', false);
+      }, 2000);
+    });
+
+    // Leave Room
+    leaveBtn.addEventListener('click', () => {
+      location.reload();
+    });
+
+    // Mobile Menu
+    mobileMenuBtn.addEventListener('click', () => {
+      sidebar.classList.add('active');
+      sidebarOverlay.classList.add('active');
+    });
+
+    sidebarOverlay.addEventListener('click', () => {
+      sidebar.classList.remove('active');
+      sidebarOverlay.classList.remove('active');
+    });
+
+    // Socket Events
+    socket.on('connect', () => {
+      connectionStatus.textContent = 'Connected';
+      connectionStatus.style.color = '#10b981';
+    });
+
+    socket.on('disconnect', () => {
+      connectionStatus.textContent = 'Disconnected';
+      connectionStatus.style.color = '#ef4444';
+    });
+
+    socket.on('message', (msg) => {
+      addMessage(msg);
+    });
+
+    socket.on('history', (msgs) => {
+      msgs.forEach(addMessage);
+    });
+
+    socket.on('system', (msg) => {
+      addSystemMessage(msg);
+    });
+
+    socket.on('presence:update', (users) => {
+      updateUserList(users);
+    });
+
+    socket.on('rooms:list', (rooms) => {
+      updateRoomList(rooms);
+    });
+
+    socket.on('typing', ({ name, isTyping }) => {
+      if (isTyping) {
+        typingIndicator.querySelector('span').textContent = `${name} is typing...`;
+        typingIndicator.classList.add('active');
+      } else {
+        typingIndicator.classList.remove('active');
+      }
+    });
+
+    // UI Helpers
+    function addMessage(msg) {
+      const isMe = msg.user.name === myName;
+      const div = document.createElement('div');
+      div.className = `message ${isMe ? 'message-own' : ''}`;
+      
+      const time = new Date(msg.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      let contentHtml = '';
+      if (msg.text) {
+        contentHtml += `<p>${escapeHtml(msg.text)}</p>`;
+      }
+      if (msg.image) {
+        contentHtml += `<img src="${msg.image}" alt="Shared image" loading="lazy">`;
+      }
+
+      div.innerHTML = `
+        <div class="message-content">
+          ${!isMe ? `<div class="message-author">${escapeHtml(msg.user.name)}</div>` : ''}
+          <div class="message-bubble">
+            ${contentHtml}
+          </div>
+          <div class="message-time">${time}</div>
+        </div>
+      `;
+      
+      messagesContainer.appendChild(div);
+      scrollToBottom();
     }
-    
-    if (!roomId) {
-        roomId = 'global';
+
+    function addSystemMessage(msg) {
+      const div = document.createElement('div');
+      div.className = 'system-message';
+      div.innerHTML = `<span>${escapeHtml(msg.text)}</span>`;
+      messagesContainer.appendChild(div);
+      scrollToBottom();
     }
-    
-    // Sanitize room ID (same as server)
-    const sanitized = roomId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '').slice(0, 50) || 'global';
-    
-    console.log('Joining room:', sanitized, 'from input:', roomId);
-    
-    state.room = sanitized;
-    
-    // Emit join event
-    socket.emit('join', { roomId: sanitized, name: state.name });
-    
-    // Update UI
-    $roomTitle.textContent = `# ${sanitized}`;
-    [...$rooms.children].forEach(ch => ch.classList.remove('active'));
-    
-    // Update active room button after rooms are rendered
-    setTimeout(() => {
-        const activeBtn = Array.from($rooms.children).find(ch => ch.textContent === `# ${sanitized}`);
-        if (activeBtn) activeBtn.classList.add('active');
-    }, 100);
-    
-    $messages.innerHTML = '';
-    
-    // Update URL without page reload - always include room for sharing
-    const url = new URL(window.location);
-    url.searchParams.set('room', sanitized);
-    window.history.pushState({ room: sanitized }, '', url);
-    
-    console.log('Updated URL to:', url.toString());
-}
 
-let typingTimer;
-$input.addEventListener('input', () => {
-    clearTimeout(typingTimer);
-    socket.emit('typing', true);
-    typingTimer = setTimeout(() => socket.emit('typing', false), 900);
-});
-
-$input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        $send.onclick();
+    function updateUserList(users) {
+      userCount.textContent = users.length;
+      usersList.innerHTML = users.map(u => `
+        <li>
+          <div class="user-avatar">${u.name.charAt(0).toUpperCase()}</div>
+          <span>${escapeHtml(u.name)}</span>
+          ${u.name === myName ? '<span class="you-badge">(You)</span>' : ''}
+        </li>
+      `).join('');
     }
-});
 
-// File upload handling
-const $fileInput = document.getElementById('fileInput');
-const $attachBtn = document.getElementById('attachBtn');
-const $imagePreviewModal = document.getElementById('imagePreviewModal');
-const $imagePreviewContainer = document.getElementById('imagePreviewContainer');
-
-$attachBtn.onclick = () => {
-    $fileInput.click();
-};
-
-$fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    // Check if it's an image
-    if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
-        $fileInput.value = '';
-        return;
+    function updateRoomList(rooms) {
+      // Filter out current room and limit
+      const otherRooms = rooms.filter(r => r !== 'global').slice(0, 5);
+      
+      if (otherRooms.length > 0) {
+        roomList.innerHTML = otherRooms.map(r => `
+          <button type="button" class="room-chip" onclick="selectRoom('${r}')">#${r}</button>
+        `).join('');
+      } else {
+        roomList.innerHTML = '';
+      }
     }
-    
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-        alert('Image size must be less than 5MB');
-        $fileInput.value = '';
-        return;
-    }
-    
-    // Show loading state
-    $attachBtn.style.opacity = '0.6';
-    $attachBtn.textContent = '⏳';
-    
-    // Read image as base64
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        state.pendingImage = event.target.result;
-        showImagePreview(event.target.result);
-        $attachBtn.style.opacity = '1';
-        $attachBtn.textContent = '📎';
-        // Visual indicator that image is ready
-        $attachBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
-        $attachBtn.style.color = '#fff';
+
+    window.selectRoom = (room) => {
+      roomInput.value = room;
     };
-    reader.onerror = () => {
-        alert('Error reading image file');
-        $attachBtn.style.opacity = '1';
-        $attachBtn.textContent = '📎';
-        $fileInput.value = '';
-    };
-    reader.readAsDataURL(file);
-});
 
-function showImagePreview(imageSrc) {
-    $imagePreviewContainer.innerHTML = `
-        <img src="${imageSrc}" style="max-width:100%; max-height:400px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.2);">
-        <p style="margin-top:12px; color:#94a3b8; font-size:13px;">Preview your image before sending</p>
-    `;
-    $imagePreviewModal.style.display = 'flex';
-}
-
-window.closeImagePreview = function() {
-    $imagePreviewModal.style.display = 'none';
-    state.pendingImage = null;
-    $fileInput.value = '';
-    // Reset attach button style
-    $attachBtn.style.background = '';
-    $attachBtn.style.color = '';
-};
-
-window.sendImageMessage = function() {
-    if (!state.pendingImage) return;
-    
-    const text = ($input.value || '').trim();
-    socket.emit('message', { 
-        text: text || '📷 Image',
-        image: state.pendingImage 
-    });
-    
-    $input.value = '';
-    state.pendingImage = null;
-    $fileInput.value = '';
-    closeImagePreview();
-    socket.emit('typing', false);
-    
-    // Reset attach button style
-    $attachBtn.style.background = '';
-    $attachBtn.style.color = '';
-};
-
-// Close image preview modal when clicking outside
-$imagePreviewModal.onclick = (e) => {
-    if (e.target === $imagePreviewModal) {
-        closeImagePreview();
+    function scrollToBottom() {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
-};
 
-$send.onclick = () => {
-    // If there's a pending image, send it
-    if (state.pendingImage) {
-        sendImageMessage();
-        return;
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
-    
-    const text = ($input.value || '').trim();
-    if (!text) return;
-    socket.emit('message', { text });
-    $input.value='';
-    socket.emit('typing', false);
-};
-
-// Socket events
-socket.on('history', (msgs) => {
-    $messages.innerHTML = '';
-    msgs.forEach(addMessage);
-    autoscroll();
-});
-
-socket.on('message', addMessage);
-socket.on('system', addMessage);
-socket.on('presence:update', setUsers);
-
-socket.on('typing', ({ name, isTyping }) => {
-    if (isTyping) state.typingBy.add(name); else state.typingBy.delete(name);
-    const others = [...state.typingBy].filter(n => n !== state.name);
-    $typing.textContent = others.length ? `${others.join(', ')} typing…` : '';
-});
-
-socket.on('rooms:list', (roomList) => {
-    // Ensure global is always in the list
-    if (!roomList.includes('global')) {
-        roomList.push('global');
-    }
-    state.allRooms = roomList;
-    renderRooms();
-    
-    // If we haven't initialized yet and socket is connected, try to initialize
-    if (!initialized && socket.connected && nameEntered) {
-        setTimeout(() => {
-            if (!initialized) {
-                initializeApp();
-            }
-        }, 100);
-    }
-});
-
-function escapeHtml(str){
-    return String(str).replace(/[&<>\"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]));
-}
-
-// Room creation UI
-const $addRoomBtn = document.getElementById('addRoomBtn');
-const $createRoom = document.getElementById('createRoom');
-const $newRoomInput = document.getElementById('newRoomInput');
-const $createRoomBtn = document.getElementById('createRoomBtn');
-const $cancelRoomBtn = document.getElementById('cancelRoomBtn');
-const $shareBtn = document.getElementById('shareBtn');
-
-$addRoomBtn.onclick = () => {
-    $createRoom.style.display = $createRoom.style.display === 'none' ? 'block' : 'none';
-    if ($createRoom.style.display === 'block') {
-        $newRoomInput.focus();
-    }
-};
-
-$createRoomBtn.onclick = () => {
-    const roomName = ($newRoomInput.value || '').trim();
-    if (roomName) {
-        socket.emit('room:create', { roomId: roomName });
-        $newRoomInput.value = '';
-        $createRoom.style.display = 'none';
-    }
-};
-
-$cancelRoomBtn.onclick = () => {
-    $newRoomInput.value = '';
-    $createRoom.style.display = 'none';
-};
-
-$newRoomInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        $createRoomBtn.onclick();
-    } else if (e.key === 'Escape') {
-        $cancelRoomBtn.onclick();
-    }
-});
-
-// Share functionality
-const $shareModal = document.getElementById('shareModal');
-const $shareUrlInput = document.getElementById('shareUrlInput');
-const $copyUrlBtn = document.getElementById('copyUrlBtn');
-
-function getShareUrl() {
-    // Get the current origin (works for both localhost and production)
-    const origin = window.location.origin;
-    const pathname = window.location.pathname || '/';
-    
-    // Create clean URL
-    const url = new URL(origin + pathname);
-    
-    // Always include room parameter for clarity (even if global)
-    if (state.room) {
-        url.searchParams.set('room', state.room);
-    }
-    
-    const shareUrl = url.toString();
-    console.log('Generated share URL:', shareUrl);
-    return shareUrl;
-}
-
-function openShareModal() {
-    const shareUrl = getShareUrl();
-    $shareUrlInput.value = shareUrl;
-    $shareModal.style.display = 'flex';
-}
-
-function closeShareModal() {
-    $shareModal.style.display = 'none';
-}
-
-// Close modal when clicking outside
-$shareModal.onclick = (e) => {
-    if (e.target === $shareModal) {
-        closeShareModal();
-    }
-};
-
-// Copy URL button
-$copyUrlBtn.onclick = () => {
-    const shareUrl = getShareUrl();
-    console.log('Copying URL:', shareUrl);
-    
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(shareUrl).then(() => {
-            $copyUrlBtn.textContent = '✓ Copied!';
-            // Show success message
-            const originalText = $copyUrlBtn.textContent;
-            setTimeout(() => {
-                $copyUrlBtn.textContent = 'Copy';
-            }, 2000);
-            // Also show alert for confirmation
-            alert('Link copied to clipboard!\n\n' + shareUrl);
-        }).catch((err) => {
-            console.error('Clipboard error:', err);
-            copyToClipboardFallback(shareUrl);
-        });
-    } else {
-        copyToClipboardFallback(shareUrl);
-    }
-};
-
-// Share button opens modal
-$shareBtn.onclick = openShareModal;
-
-// Social sharing functions
-function shareOnWhatsApp() {
-    const url = getShareUrl();
-    const text = `Join me on Sai Chat! ${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-}
-
-function shareOnFacebook() {
-    const url = encodeURIComponent(getShareUrl());
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
-}
-
-function shareOnTwitter() {
-    const url = encodeURIComponent(getShareUrl());
-    const text = encodeURIComponent('Join me on Sai Chat!');
-    window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
-}
-
-function shareViaEmail() {
-    const url = getShareUrl();
-    const subject = encodeURIComponent('Join me on Sai Chat!');
-    const body = encodeURIComponent(`Hey! Join me on Sai Chat:\n\n${url}`);
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-}
-
-function copyToClipboardFallback(link) {
-    const textArea = document.createElement('textarea');
-    textArea.value = link;
-    textArea.style.position = 'fixed';
-    textArea.style.left = '-9999px';
-    textArea.style.top = '0';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    try {
-        document.execCommand('copy');
-        const originalText = $shareBtn.textContent;
-        $shareBtn.textContent = '✓';
-        setTimeout(() => {
-            $shareBtn.textContent = originalText;
-        }, 2000);
-    } catch (err) {
-        // Last resort - show prompt
-        prompt('Copy this link:', link);
-    }
-    document.body.removeChild(textArea);
-}
-
-// Check URL for room parameter on load
-function getRoomFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    let room = params.get('room');
-    
-    // Also check hash if search params don't have it
-    if (!room && window.location.hash) {
-        const hashMatch = window.location.hash.match(/room=([^&]+)/);
-        if (hashMatch) {
-            room = hashMatch[1];
-        }
-    }
-    
-    console.log('Room from URL:', room);
-    return room || 'global';
-}
-
-// Handle browser back/forward buttons
-window.addEventListener('popstate', (e) => {
-    const roomFromURL = getRoomFromURL();
-    if (roomFromURL !== state.room) {
-        joinRoom(roomFromURL);
-    }
-});
-
-// Initialize: prompt for name and join room from URL
-let initialized = false;
-let nameEntered = false;
-
-function initializeApp() {
-    if (initialized) return;
-    
-    // Get name first (only once)
-    if (!nameEntered) {
-        const name = prompt('Enter your name:') || `user-${Math.random().toString(36).substr(2, 9)}`;
-        state.name = name.trim().slice(0, 32);
-        nameEntered = true;
-    }
-    
-    // Function to actually join the room
-    function doJoinRoom() {
-        if (initialized) return; // Prevent double initialization
-        initialized = true;
-        
-        const initialRoom = getRoomFromURL();
-        console.log('Initializing app, joining room from URL:', initialRoom);
-        console.log('Current URL:', window.location.href);
-        
-        // Ensure we have a valid room
-        if (!initialRoom || initialRoom === 'undefined' || initialRoom === 'null') {
-            console.log('Invalid room from URL, using global');
-            joinRoom('global');
-        } else {
-            joinRoom(initialRoom);
-        }
-    }
-    
-    // Wait for socket connection
-    if (socket && socket.connected) {
-        // Socket already connected, wait a bit for rooms list
-        setTimeout(doJoinRoom, 300);
-    } else if (socket) {
-        socket.once('connect', () => {
-            console.log('Socket connected, waiting for rooms list...');
-            // Wait for rooms list to be received
-            socket.once('rooms:list', () => {
-                setTimeout(doJoinRoom, 100);
-            });
-            // Fallback in case rooms:list was already received
-            setTimeout(doJoinRoom, 500);
-        });
-    } else {
-        // Socket not initialized yet, wait a bit
-        setTimeout(() => {
-            if (socket && socket.connected) {
-                doJoinRoom();
-            } else if (socket) {
-                socket.once('connect', doJoinRoom);
-            }
-        }, 1000);
-    }
-}
-
-// Initialize when page loads
-if (document.readyState === 'loading') {
-    window.addEventListener('load', () => {
-        setTimeout(initializeApp, 100);
-    });
-} else {
-    // Page already loaded
-    setTimeout(initializeApp, 100);
-}
-
-// Init default rooms
-renderRooms();
-    </script>
+  </script>
 </body>
 </html>

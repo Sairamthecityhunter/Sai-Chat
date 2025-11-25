@@ -4,273 +4,154 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { customAlphabet } = require('nanoid');
+const path = require('path');
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
-
-const path = require('path');
 
 const app = express();
 app.use(cors());
 
-// Trust proxy for Railway (important for HTTPS and correct headers)
+// Trust proxy for Vercel/Railway
 app.set('trust proxy', 1);
-
-// Optional health check
-app.get('/health', (_req, res) => res.send('ok'));
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve index.html for all other routes (SPA support) - must be last
-app.use((req, res) => {
-  // Don't serve index.html for socket.io or other API routes
-  if (req.path.startsWith('/socket.io') || req.path.startsWith('/health')) {
-    return res.status(404).send('Not found');
-  }
+// Health check endpoint
+app.get('/health', (_req, res) => res.status(200).send('ok'));
+
+// Serve index.html for all other routes (SPA support)
+app.get(/^(?!\/socket.io).*$/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Only initialize Socket.IO and HTTP server if NOT on Vercel
-// Vercel serverless functions don't support WebSockets
-let server, io, rooms, lastMsgAt;
-
-// Simple profanity filter (replace bad-words with a simple function)
-function filterBadWords(text) {
-  // Simple word filter - you can extend this list
-  const badWords = ['badword1', 'badword2']; // Add words as needed
-  let filtered = text;
-  badWords.forEach(word => {
-    const regex = new RegExp(word, 'gi');
-    filtered = filtered.replace(regex, '*'.repeat(word.length));
-  });
-  return filtered;
-}
+// Global state
+let rooms = new Map();
+let lastMsgAt = new Map();
+const RATE_MS = 600;
 
 function getRoom(roomId) {
-  if (!rooms) return null; // Safety check for Vercel
   if (!rooms.has(roomId)) {
     rooms.set(roomId, { users: new Map(), messages: [] });
   }
   return rooms.get(roomId);
 }
 
-// Initialize Socket.IO and HTTP server
-// On Vercel, Socket.IO will use polling transport (works with serverless)
-let server, io, rooms, lastMsgAt;
-
-// Always initialize server and Socket.IO
-server = http.createServer(app);
-
-// Configure Socket.IO for Vercel compatibility
-// On Vercel, force polling transport since WebSockets don't work well with serverless
-const ioOptions = {
-  cors: { origin: '*' },
-  transports: process.env.VERCEL ? ['polling'] : ['websocket', 'polling'],
-  allowEIO3: true
-};
-
-io = new Server(server, ioOptions);
-
-// In-memory room store
-rooms = new Map(); // roomId => { users: Map(socketId=>{name}), messages: Array }
-
-// Initialize global room on startup
+// Initialize global room
 getRoom('global');
 
-// Simple per-socket rate limit (1 msg / 600ms)
-lastMsgAt = new Map();
+// Create HTTP server
+const server = http.createServer(app);
 
-// Simple per-socket rate limit (1 msg / 600ms)
-const RATE_MS = 600;
+// Socket.IO Configuration
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ["GET", "POST"]
+  },
+  transports: ['polling', 'websocket'], // Allow both, Vercel will force polling if needed via client
+  allowEIO3: true,
+  pingTimeout: 60000,
+});
 
-// Set up Socket.IO handlers (works on Vercel with polling)
+// Socket.IO Logic
 io.on('connection', (socket) => {
-  // defaults
+  // Initial setup
   socket.data.name = `user-${nanoid()}`;
-  socket.data.room = null; // Don't auto-join, wait for client to specify
+  socket.data.room = null;
 
-  // Ensure global room exists and send current room list to new connection
-  getRoom('global'); // Make sure global always exists
+  // Send room list
   socket.emit('rooms:list', Array.from(rooms.keys()));
 
-  // join a room / set name
   socket.on('join', ({ roomId = 'global', name }) => {
-    // Sanitize room ID (alphanumeric, hyphens, underscores only, max 50 chars)
-    let sanitizedRoomId = 'global';
-    if (roomId && typeof roomId === 'string') {
-      const sanitized = roomId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '').slice(0, 50);
-      if (sanitized && sanitized.length > 0) {
-        sanitizedRoomId = sanitized;
+    const sanitizedRoomId = (roomId || 'global').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '').slice(0, 50) || 'global';
+
+    // Leave previous room
+    if (socket.data.room) {
+      socket.leave(socket.data.room);
+      const prevRoom = getRoom(socket.data.room);
+      if (prevRoom) {
+        prevRoom.users.delete(socket.id);
+        io.to(socket.data.room).emit('presence:update', Array.from(prevRoom.users.values()));
       }
     }
-    
-    // leave previous room
-    const prevRoom = socket.data.room;
-    if (prevRoom && rooms.has(prevRoom)) {
-      const r = getRoom(prevRoom);
-      r.users.delete(socket.id);
-      io.to(prevRoom).emit('presence:update', Array.from(r.users.values()));
-      socket.leave(prevRoom);
-    }
 
+    // Join new room
     socket.data.room = sanitizedRoomId;
-    if (name && typeof name === 'string') {
-      socket.data.name = name.trim().slice(0, 32);
-    }
+    if (name) socket.data.name = name.trim().slice(0, 32);
 
     socket.join(sanitizedRoomId);
-    const r2 = getRoom(sanitizedRoomId);
-    r2.users.set(socket.id, { name: socket.data.name });
+    const room = getRoom(sanitizedRoomId);
+    room.users.set(socket.id, { name: socket.data.name });
 
+    // Notify room
     io.to(sanitizedRoomId).emit('system', {
       id: nanoid(),
       user: { name: 'system' },
-      text: `${socket.data.name} joined ${sanitizedRoomId}`,
+      text: `${socket.data.name} joined`,
       ts: Date.now(),
       roomId: sanitizedRoomId
     });
 
-    io.to(sanitizedRoomId).emit('presence:update', Array.from(r2.users.values()));
-    socket.emit('history', r2.messages.slice(-100));
-    
-    // Broadcast updated room list to all clients
+    io.to(sanitizedRoomId).emit('presence:update', Array.from(room.users.values()));
+    socket.emit('history', room.messages.slice(-50));
     io.emit('rooms:list', Array.from(rooms.keys()));
-  });
-  
-  // Handle room creation request
-  socket.on('room:create', ({ roomId }) => {
-    if (!roomId || typeof roomId !== 'string') return;
-    
-    // Sanitize room ID (alphanumeric, hyphens, underscores only, max 50 chars)
-    const sanitized = roomId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '').slice(0, 50);
-    if (!sanitized || sanitized.length < 1) return;
-    
-    // Create room if it doesn't exist
-    getRoom(sanitized);
-    
-    // Broadcast updated room list to all clients
-    io.emit('rooms:list', Array.from(rooms.keys()));
-    
-    // Auto-join the newly created room (trigger join handler)
-    const prevRoom = socket.data.room;
-    if (prevRoom && rooms.has(prevRoom)) {
-      const r = getRoom(prevRoom);
-      r.users.delete(socket.id);
-      io.to(prevRoom).emit('presence:update', Array.from(r.users.values()));
-      socket.leave(prevRoom);
-    }
-
-    socket.data.room = sanitized;
-    socket.join(sanitized);
-    const r2 = getRoom(sanitized);
-    r2.users.set(socket.id, { name: socket.data.name });
-
-    io.to(sanitized).emit('system', {
-      id: nanoid(),
-      user: { name: 'system' },
-      text: `${socket.data.name} joined ${sanitized}`,
-      ts: Date.now(),
-      roomId: sanitized
-    });
-
-    io.to(sanitized).emit('presence:update', Array.from(r2.users.values()));
-    socket.emit('history', r2.messages.slice(-100));
-  });
-
-  socket.on('typing', (isTyping) => {
-    const roomId = socket.data.room;
-    socket.to(roomId).emit('typing', { name: socket.data.name, isTyping: !!isTyping });
   });
 
   socket.on('message', (raw) => {
     const now = Date.now();
     const last = lastMsgAt.get(socket.id) || 0;
-    if (now - last < RATE_MS) return; // rate limit
+    if (now - last < RATE_MS) return;
     lastMsgAt.set(socket.id, now);
 
     const roomId = socket.data.room;
-    const r = getRoom(roomId);
+    if (!roomId) return;
 
-    let text = (raw && raw.text ? String(raw.text) : '').slice(0, 2000);
-    text = filterBadWords(text);
-    
-    // Handle image uploads
+    const room = getRoom(roomId);
+    let text = (raw?.text || '').slice(0, 2000);
     let image = null;
-    if (raw && raw.image && typeof raw.image === 'string') {
-      // Validate base64 image
-      if (raw.image.startsWith('data:image/')) {
-        // Limit image size (5MB in base64 is roughly 6.67MB in original)
-        if (raw.image.length < 7000000) { // ~5MB base64
-          image = raw.image;
-        }
-      }
+
+    if (raw?.image?.startsWith('data:image/') && raw.image.length < 7000000) {
+      image = raw.image;
     }
-    
-    // Must have either text or image
+
     if (!text.trim() && !image) return;
 
     const msg = {
       id: nanoid(),
       user: { name: socket.data.name },
       text: text || null,
-      image: image || null,
+      image: image,
       ts: Date.now(),
       roomId
     };
 
-    r.messages.push(msg);
-    if (r.messages.length > 500) r.messages.shift();
+    room.messages.push(msg);
+    if (room.messages.length > 100) room.messages.shift();
 
     io.to(roomId).emit('message', msg);
   });
 
   socket.on('disconnect', () => {
-    const roomId = socket.data.room;
-    const r = getRoom(roomId);
-    r.users.delete(socket.id);
-    io.to(roomId).emit('presence:update', Array.from(r.users.values()));
+    if (socket.data.room) {
+      const room = getRoom(socket.data.room);
+      if (room) {
+        room.users.delete(socket.id);
+        io.to(socket.data.room).emit('presence:update', Array.from(room.users.values()));
+      }
+    }
   });
 });
 
-// Cleanup function to delete messages older than 24 hours
-function cleanupOldMessages() {
-  const now = Date.now();
-  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-  
-  rooms.forEach((room, roomId) => {
-    const initialLength = room.messages.length;
-    // Filter out messages older than 24 hours
-    room.messages = room.messages.filter(msg => {
-      return (now - msg.ts) < TWENTY_FOUR_HOURS;
-    });
-    
-    const removedCount = initialLength - room.messages.length;
-    if (removedCount > 0) {
-      console.log(`[Cleanup] Removed ${removedCount} old message(s) from room: ${roomId}`);
-    }
-  });
-}
-
-// Run cleanup every hour
-// Note: On Vercel, this runs per function instance, so cleanup is limited
-setInterval(cleanupOldMessages, 60 * 60 * 1000); // 1 hour in milliseconds
-// Also run cleanup on startup to clean any old messages
-cleanupOldMessages();
-
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
 
-// Export for Vercel serverless functions
 if (process.env.VERCEL) {
-  // Export the server for Vercel - Socket.IO will use polling transport
-  // This allows Socket.IO to work on Vercel, though with some limitations
-  module.exports = server;
+  // Vercel Serverless Function Export
+  module.exports = (req, res) => {
+    server.emit('request', req, res);
+  };
 } else {
-  // Traditional server startup for Railway, Render, etc.
-  server.listen(PORT, HOST, () => {
-    const protocol = process.env.RAILWAY_ENVIRONMENT ? 'https' : 'http';
-    const hostname = process.env.RAILWAY_PUBLIC_DOMAIN || HOST;
-    console.log(`✓ Chat server running on ${protocol}://${hostname}:${PORT}`);
-    console.log(`✓ Server is ready to accept connections`);
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
   });
 }
