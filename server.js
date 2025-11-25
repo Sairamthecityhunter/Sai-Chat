@@ -3,10 +3,17 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { customAlphabet } = require('nanoid');
 const path = require('path');
 
-const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
+// Simple ID generator to avoid ESM/CJS issues with nanoid
+const nanoid = (size = 10) => {
+  const chars = '1234567890abcdefghijklmnopqrstuvwxyz';
+  let id = '';
+  for (let i = 0; i < size; i++) {
+    id += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return id;
+};
 
 const app = express();
 app.use(cors());
