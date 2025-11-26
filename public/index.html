@@ -94,7 +94,7 @@
             <div class="welcome-message">
               <div class="welcome-icon">👋</div>
               <h3>Welcome to Pro Chat!</h3>
-              <p>You've joined the <strong id="welcome-room-name">global</strong> room.</p>
+              <p>You've joined the <strong id="welcome-room-name"></strong> room.</p>
             </div>
             <!-- Messages will be inserted here -->
           </div>
@@ -175,7 +175,7 @@
         // Update UI
         currentRoomName.textContent = room;
         headerRoomName.textContent = '#' + room;
-        welcomeRoomName.textContent = room;
+        welcomeRoomName.textContent = escapeHtml(room);
         
         // Clear previous messages if re-joining
         const welcomeMsg = messagesContainer.querySelector('.welcome-message');

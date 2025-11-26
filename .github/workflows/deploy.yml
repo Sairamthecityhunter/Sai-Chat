@@ -20,6 +20,6 @@ jobs:
       - name: Install dependencies
         run: npm install
       
-      - name: Build check
-        run: echo "Build successful"
-
+      - name: Trigger Render Deployment
+        if: success() && github.ref == 'refs/heads/main'
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
